@@ -1122,252 +1122,233 @@ function toggleW(id){const el=document.getElementById(id),d=document.getElementB
 }
 
 // ═══════════════════════════════════════════════════════════
-//  THREE.JS — PARTICLE HUMAN BODY v2 (surface-only hologram)
+//  THREE.JS — PARTICLE HUMAN BODY v3
+//  - Skip on mobile (< 768px) to prevent JS errors
+//  - Surface-only particles with clean anatomy
+//  - Try/catch safety wrapper
 // ═══════════════════════════════════════════════════════════
-{
-  const canvas=$('three-canvas');
-  const renderer=new THREE.WebGLRenderer({canvas,alpha:true,antialias:true});
-  renderer.setClearColor(0x000000,0);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+try {
+  const isMobile = window.innerWidth < 768;
+  const figCard = $('figure-card');
 
-  const scene=new THREE.Scene();
-  const camera=new THREE.PerspectiveCamera(36,1,0.1,100);
-  camera.position.set(0,0.9,3.0);
-  camera.lookAt(0,0.9,0);
+  if (isMobile) {
+    // Mobile fallback: CSS-only animated figure
+    figCard.innerHTML += `<div id="mob-figure" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:1">
+      <div style="position:relative;width:80px;height:180px">
+        <div style="position:absolute;left:50%;transform:translateX(-50%);width:32px;height:32px;border-radius:50%;border:2px solid var(--teal);box-shadow:0 0 12px var(--teal);animation:pulse 2s infinite;top:0"></div>
+        <div style="position:absolute;left:50%;transform:translateX(-50%);width:24px;height:70px;border:1px solid var(--teal);opacity:.7;border-radius:4px;top:36px"></div>
+        <div style="position:absolute;left:4px;width:12px;height:50px;border:1px solid var(--teal);opacity:.5;border-radius:3px;top:40px"></div>
+        <div style="position:absolute;right:4px;width:12px;height:50px;border:1px solid var(--teal);opacity:.5;border-radius:3px;top:40px"></div>
+        <div style="position:absolute;left:50%;transform:translateX(-65%);width:14px;height:60px;border:1px solid var(--teal);opacity:.6;border-radius:3px;top:110px"></div>
+        <div style="position:absolute;left:50%;transform:translateX(10%);width:14px;height:60px;border:1px solid var(--teal);opacity:.6;border-radius:3px;top:110px"></div>
+      </div>
+    </div>`;
+  } else {
+    // DESKTOP: Full Three.js particle body
+    const canvas = $('three-canvas');
+    const renderer = new THREE.WebGLRenderer({canvas, alpha:true, antialias:true});
+    renderer.setClearColor(0x000000, 0);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
-  function resize(){
-    const w=canvas.parentElement.clientWidth,h=canvas.parentElement.clientHeight;
-    renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();
-  }
-  resize();
-  window.addEventListener('resize',resize);
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 100);
+    camera.position.set(0, 0.9, 3.0);
+    camera.lookAt(0, 0.9, 0);
 
-  const baseCol=new THREE.Color(rCol(currentScore));
-  const heartCol=new THREE.Color(r0&&r0.score&&r0.score.hrv_rmssd_milli>50?'#00e5c3':r0&&r0.score&&r0.score.hrv_rmssd_milli>30?'#f59e0b':'#ef4444');
-  const headCol=new THREE.Color(sl0&&sl0.score&&(sl0.score.sleep_performance_percentage||0)>70?'#a78bfa':'#f59e0b');
-  const legCol=new THREE.Color(cycs.length&&cycs[0].score&&cycs[0].score.strain>12?'#ef4444':'#3b82f6');
-
-  // ── SURFACE-ONLY PARTICLE GENERATION ─────────────────
-  const positions=[], colors=[];
-
-  // Fibonacci sphere — uniform surface distribution
-  function fibSphere(cx,cy,cz,r,n,col,bright=1){
-    for(let i=0;i<n;i++){
-      const phi=Math.acos(1-2*(i+.5)/n);
-      const theta=Math.PI*(1+Math.sqrt(5))*i;
-      positions.push(cx+r*Math.sin(phi)*Math.cos(theta),cy+r*Math.cos(phi),cz+r*Math.sin(phi)*Math.sin(theta));
-      const b=(0.6+Math.random()*0.4)*bright;
-      colors.push(col.r*b,col.g*b,col.b*b);
+    function resize() {
+      const w = figCard.clientWidth, h = figCard.clientHeight;
+      renderer.setSize(w, h);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
     }
-  }
+    resize();
+    window.addEventListener('resize', resize);
 
-  // Surface cylinder — points only on the curved surface
-  function surfCyl(cx,cy,cz,r,rz,h,n,col,bright=1,tx=0,tz=0){
-    for(let i=0;i<n;i++){
-      const theta=Math.random()*Math.PI*2;
-      const t=Math.random();
-      const x=r*Math.cos(theta);
-      const z=rz*Math.sin(theta);
-      positions.push(cx+x+t*h*tx,cy+t*h,cz+z+t*h*tz);
-      const b=(0.55+Math.random()*0.45)*bright;
-      colors.push(col.r*b,col.g*b,col.b*b);
+    const baseCol = new THREE.Color(rCol(currentScore));
+    const hrvMs = r0 && r0.score ? r0.score.hrv_rmssd_milli : 40;
+    const heartCol = new THREE.Color(hrvMs > 50 ? '#00e5c3' : hrvMs > 30 ? '#f59e0b' : '#ef4444');
+    const sleepPct = sl0 && sl0.score ? (sl0.score.sleep_performance_percentage || 0) : 60;
+    const headCol = new THREE.Color(sleepPct > 70 ? '#a78bfa' : '#f59e0b');
+    const strainVal = cycs.length && cycs[0].score ? cycs[0].score.strain : 8;
+    const legCol = new THREE.Color(strainVal > 12 ? '#ef4444' : strainVal > 7 ? '#f59e0b' : '#3b82f6');
+
+    const positions = [], cols = [];
+
+    // Uniform surface of a sphere
+    function addSphere(cx, cy, cz, r, n, col) {
+      for (let i = 0; i < n; i++) {
+        const phi = Math.acos(1 - 2*(i+.5)/n);
+        const theta = Math.PI*(1+Math.sqrt(5))*i;
+        const b = 0.55 + Math.random()*0.45;
+        positions.push(cx + r*Math.sin(phi)*Math.cos(theta), cy + r*Math.cos(phi), cz + r*Math.sin(phi)*Math.sin(theta));
+        cols.push(col.r*b, col.g*b, col.b*b);
+      }
     }
-  }
 
-  // Surface ellipsoid — only outer shell
-  function surfEllipsoid(cx,cy,cz,rx,ry,rz,n,col,bright=1){
-    for(let i=0;i<n;i++){
-      const u=Math.random()*Math.PI*2;
-      const v=Math.acos(2*Math.random()-1);
-      positions.push(cx+rx*Math.sin(v)*Math.cos(u),cy+ry*Math.cos(v),cz+rz*Math.sin(v)*Math.sin(u));
-      const b=(0.55+Math.random()*0.45)*bright;
-      colors.push(col.r*b,col.g*b,col.b*b);
+    // Horizontal ring at given Y
+    function addRingSlice(cx, cy, cz, rx, rz, n, col, bright=1) {
+      for (let i = 0; i < n; i++) {
+        const theta = (i / n) * Math.PI * 2;
+        const b = (0.5 + Math.random()*0.5) * bright;
+        positions.push(cx + rx*Math.cos(theta), cy + (Math.random()-.5)*0.015, cz + rz*Math.sin(theta));
+        cols.push(col.r*b, col.g*b, col.b*b);
+      }
     }
-  }
 
-  // Ring / halo
-  function ring(cx,cy,cz,r,thickness,n,col,bright=1){
-    for(let i=0;i<n;i++){
-      const theta=Math.random()*Math.PI*2;
-      const dr=(Math.random()-.5)*thickness;
-      positions.push(cx+(r+dr)*Math.cos(theta),cy+(Math.random()-.5)*thickness*.3,cz+(r+dr)*Math.sin(theta));
-      const b=(0.6+Math.random()*0.4)*bright;
-      colors.push(col.r*b,col.g*b,col.b*b);
+    // Vertical line segment (spine, limb centerline)
+    function addSegment(x1,y1,z1, x2,y2,z2, n, col, bright=0.5) {
+      for(let i=0;i<n;i++){
+        const t = i/(n-1);
+        const b = (0.3 + Math.random()*0.4) * bright;
+        positions.push(x1+(x2-x1)*t, y1+(y2-y1)*t, z1+(z2-z1)*t);
+        cols.push(col.r*b, col.g*b, col.b*b);
+      }
     }
-  }
 
-  // ── BODY PARTS ────────────────────────────────────────
-  // HEAD (fibonacci sphere — most uniform)
-  fibSphere(0,1.72,0,0.155,90,headCol,1.0);
-  // Extra head glow ring
-  ring(0,1.72,0,0.18,0.02,20,headCol,0.5);
+    // ── HEAD ──
+    addSphere(0, 1.72, 0, 0.155, 100, headCol);
 
-  // NECK
-  surfCyl(0,1.54,0,0.055,0.04,0.16,16,baseCol,0.8);
+    // ── NECK ──
+    addRingSlice(0, 1.565, 0, 0.055, 0.045, 12, baseCol, 0.8);
+    addRingSlice(0, 1.535, 0, 0.055, 0.045, 12, baseCol, 0.8);
 
-  // SHOULDERS (wider ellipsoids)
-  surfEllipsoid(-0.27,1.44,0,0.1,0.075,0.07,28,baseCol,0.9);
-  surfEllipsoid(0.27,1.44,0,0.1,0.075,0.07,28,baseCol,0.9);
+    // ── SHOULDERS + COLLAR ──
+    addRingSlice(0, 1.48, 0, 0.22, 0.14, 28, baseCol, 0.9);
+    addRingSlice(0, 1.44, 0, 0.26, 0.15, 30, baseCol, 0.85);
 
-  // CHEST — cross-section slices for clear outline
-  for(let slice=0;slice<12;slice++){
-    const t=slice/11;
-    const y=1.05+t*0.38;
-    const rx=0.21-t*0.05;
-    const rz=0.13-t*0.03;
-    const n=Math.round(14+t*4);
-    for(let i=0;i<n;i++){
-      const theta=(i/n)*Math.PI*2;
-      const col2=slice<3?heartCol:baseCol;
-      const b=0.6+Math.random()*0.4;
-      positions.push(rx*Math.cos(theta),y,rz*Math.sin(theta));
-      colors.push(col2.r*b,col2.g*b,col2.b*b);
+    // ── CHEST (cross-section slices, heart zone) ──
+    const chestSlices = [
+      {y:1.40, rx:0.22, rz:0.14, n:28, col:baseCol},
+      {y:1.33, rx:0.21, rz:0.13, n:26, col:heartCol},
+      {y:1.26, rx:0.21, rz:0.13, n:26, col:heartCol},
+      {y:1.19, rx:0.20, rz:0.13, n:24, col:baseCol},
+      {y:1.12, rx:0.19, rz:0.12, n:24, col:baseCol},
+      {y:1.05, rx:0.18, rz:0.11, n:22, col:baseCol},
+    ];
+    chestSlices.forEach(s => addRingSlice(0, s.y, 0, s.rx, s.rz, s.n, s.col, 0.9));
+
+    // ── ABDOMEN ──
+    [{y:0.98,rx:0.17,rz:0.10,n:20},{y:0.91,rx:0.16,rz:0.10,n:20},{y:0.84,rx:0.16,rz:0.10,n:18},{y:0.77,rx:0.16,rz:0.10,n:18}]
+      .forEach(s => addRingSlice(0, s.y, 0, s.rx, s.rz, s.n, baseCol, 0.75));
+
+    // ── HIPS ──
+    addRingSlice(0, 0.70, 0, 0.20, 0.14, 26, baseCol, 0.85);
+    addRingSlice(0, 0.65, 0, 0.21, 0.14, 26, baseCol, 0.85);
+
+    // ── SPINE (subtle dots down the back) ──
+    addSegment(0,1.45,0.13, 0,0.65,0.13, 20, baseCol, 0.35);
+
+    // ── UPPER ARMS (straight cylinders, no tilt distortion) ──
+    const armSlicesY = [1.41,1.34,1.27,1.20,1.13,1.06];
+    const armX = 0.32;
+    armSlicesY.forEach(y => {
+      addRingSlice(-armX, y, 0, 0.055, 0.045, 12, baseCol, 0.82);
+      addRingSlice(armX, y, 0, 0.055, 0.045, 12, baseCol, 0.82);
+    });
+    // Elbow spheres
+    addSphere(-0.36, 0.98, 0, 0.045, 16, baseCol);
+    addSphere(0.36, 0.98, 0, 0.045, 16, baseCol);
+
+    // ── LOWER ARMS ──
+    const forearmY = [0.94,0.87,0.80,0.73,0.66,0.59];
+    forearmY.forEach(y => {
+      addRingSlice(-0.36, y, 0, 0.040, 0.032, 10, baseCol, 0.72);
+      addRingSlice(0.36, y, 0, 0.040, 0.032, 10, baseCol, 0.72);
+    });
+    // Hands
+    addSphere(-0.36, 0.52, 0, 0.05, 20, baseCol);
+    addSphere(0.36, 0.52, 0, 0.05, 20, baseCol);
+
+    // ── UPPER LEGS ──
+    const thighX = 0.11;
+    const thighY = [0.60,0.53,0.46,0.39,0.32,0.25];
+    thighY.forEach(y => {
+      addRingSlice(-thighX, y, 0, 0.072, 0.058, 14, legCol, 0.85);
+      addRingSlice(thighX, y, 0, 0.072, 0.058, 14, legCol, 0.85);
+    });
+    // Knee spheres
+    addSphere(-thighX, 0.18, 0, 0.062, 20, legCol);
+    addSphere(thighX, 0.18, 0, 0.062, 20, legCol);
+
+    // ── LOWER LEGS ──
+    const calfY = [0.14,0.07,0.00,-0.07,-0.14];
+    calfY.forEach(y => {
+      addRingSlice(-thighX, y, 0, 0.050, 0.040, 12, legCol, 0.72);
+      addRingSlice(thighX, y, 0, 0.050, 0.040, 12, legCol, 0.72);
+    });
+    // Feet
+    addRingSlice(-thighX, -0.20, -0.04, 0.055, 0.040, 10, legCol, 0.62);
+    addRingSlice(thighX, -0.20, -0.04, 0.055, 0.040, 10, legCol, 0.62);
+
+    // ── AMBIENT PARTICLES ──
+    for(let i=0;i<60;i++){
+      const r2 = 1.0 + Math.random()*0.8;
+      const theta = Math.random()*Math.PI*2;
+      const phi = Math.acos(2*Math.random()-1);
+      const b = 0.03 + Math.random()*0.08;
+      positions.push(r2*Math.sin(phi)*Math.cos(theta), r2*Math.cos(phi)*0.65+0.85, r2*Math.sin(phi)*Math.sin(theta));
+      cols.push(baseCol.r*b, baseCol.g*b, baseCol.b*b);
     }
-  }
 
-  // ABDOMEN — cross-sections
-  for(let slice=0;slice<8;slice++){
-    const t=slice/7;
-    const y=0.67+t*0.35;
-    const rx=0.16-t*0.02;
-    const rz=0.1;
-    for(let i=0;i<12;i++){
-      const theta=(i/12)*Math.PI*2;
-      const b=0.5+Math.random()*0.4;
-      positions.push(rx*Math.cos(theta),y,rz*Math.sin(theta));
-      colors.push(baseCol.r*b,baseCol.g*b,baseCol.b*b);
+    // ── BUILD GEOMETRY ──
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+    const mat = new THREE.PointsMaterial({size:0.016, vertexColors:true, sizeAttenuation:true, transparent:true, opacity:.9});
+    const pts = new THREE.Points(geo, mat);
+
+    const group = new THREE.Group();
+    group.add(pts);
+    scene.add(group);
+
+    // RINGS
+    function makeRing(r, y, op, speed=1) {
+      const g = new THREE.TorusGeometry(r, 0.004, 6, 80);
+      const m = new THREE.MeshBasicMaterial({color:baseCol, transparent:true, opacity:op});
+      const mesh = new THREE.Mesh(g, m);
+      mesh.rotation.x = Math.PI/2; mesh.position.y = y;
+      mesh._speed = speed;
+      group.add(mesh);
+      return mesh;
     }
+    const r1 = makeRing(0.28, -0.24, 0.55, 0.5);
+    const r2x = makeRing(0.20, -0.24, 0.28, -0.35);
+    const r3x = makeRing(0.38, -0.24, 0.14, 0.2);
+
+    // Ground glow
+    const gGeo = new THREE.CircleGeometry(0.30, 64);
+    const gMat = new THREE.MeshBasicMaterial({color:baseCol, transparent:true, opacity:.07, side:THREE.DoubleSide});
+    const ground = new THREE.Mesh(gGeo, gMat);
+    ground.rotation.x = -Math.PI/2; ground.position.y = -0.24;
+    group.add(ground);
+
+    // ── MOUSE INTERACTION ──
+    let mouseX = 0, mouseY = 0;
+    figCard.addEventListener('mousemove', e => {
+      const rect = figCard.getBoundingClientRect();
+      mouseX = (e.clientX - rect.left) / rect.width - 0.5;
+      mouseY = (e.clientY - rect.top) / rect.height - 0.5;
+    });
+    figCard.addEventListener('mouseleave', () => { mouseX = 0; mouseY = 0; });
+
+    // ── ANIMATE ──
+    let t = 0, rotY = 0, rotX = 0;
+    function animate() {
+      requestAnimationFrame(animate);
+      t += 0.005;
+      rotY += (mouseX * 0.7 - rotY) * 0.05;
+      rotX += (-mouseY * 0.25 - rotX) * 0.05;
+      group.rotation.y = t * 0.3 + rotY;
+      group.rotation.x = rotX;
+      [r1, r2x, r3x].forEach(r => r.rotation.z += r._speed * 0.01);
+      r1.scale.setScalar(1 + Math.sin(t*1.5)*0.04);
+      mat.opacity = 0.86 + Math.sin(t*1.2)*0.1;
+      renderer.render(scene, camera);
+    }
+    animate();
   }
-
-  // HIPS — wider cross-section
-  for(let i=0;i<24;i++){
-    const theta=(i/24)*Math.PI*2;
-    const b=0.6+Math.random()*0.35;
-    positions.push(0.21*Math.cos(theta),0.63,0.15*Math.sin(theta));
-    colors.push(baseCol.r*b,baseCol.g*b,baseCol.b*b);
-  }
-
-  // UPPER ARMS — surface cylinders with tilt
-  surfCyl(-0.27,1.14,0,0.055,0.04,0.32,44,baseCol,0.85,-0.28,0);
-  surfCyl(0.27,1.14,0,0.055,0.04,0.32,44,baseCol,0.85,0.28,0);
-  // ELBOW joints
-  fibSphere(-0.36,0.83,0,0.045,18,baseCol,0.75);
-  fibSphere(0.36,0.83,0,0.045,18,baseCol,0.75);
-  // LOWER ARMS
-  surfCyl(-0.36,0.84,0,0.04,0.03,0.32,36,baseCol,0.75,-0.05,0);
-  surfCyl(0.36,0.84,0,0.04,0.03,0.32,36,baseCol,0.75,0.05,0);
-  // HANDS
-  fibSphere(-0.37,0.5,0,0.05,22,baseCol,0.7);
-  fibSphere(0.37,0.5,0,0.05,22,baseCol,0.7);
-
-  // UPPER LEGS — surface cylinders
-  surfCyl(-0.1,0.35,0,0.075,0.055,0.28,52,legCol,0.85);
-  surfCyl(0.1,0.35,0,0.075,0.055,0.28,52,legCol,0.85);
-  // KNEE joints
-  fibSphere(-0.1,0.07,0,0.06,20,legCol,0.7);
-  fibSphere(0.1,0.07,0,0.06,20,legCol,0.7);
-  // LOWER LEGS
-  surfCyl(-0.1,0.07,0,0.05,0.04,0.34,44,legCol,0.7);
-  surfCyl(0.1,0.07,0,0.05,0.04,0.34,44,legCol,0.7);
-  // FEET — tapered ellipsoids
-  surfEllipsoid(-0.1,-0.04,-0.07,0.055,0.03,0.1,18,legCol,0.65);
-  surfEllipsoid(0.1,-0.04,-0.07,0.055,0.03,0.1,18,legCol,0.65);
-
-  // SPINE DOTS — vertical line of particles
-  for(let i=0;i<18;i++){
-    const y=0.1+i*0.09;
-    const b=0.3+Math.random()*0.3;
-    positions.push((Math.random()-.5)*0.01,y,(Math.random()-.5)*0.01+0.12);
-    colors.push(baseCol.r*b,baseCol.g*b,baseCol.b*b);
-  }
-
-  // HEART PULSE ZONE — concentrated bright particles on chest
-  for(let i=0;i<35;i++){
-    const x=(Math.random()-.5)*0.08-0.05;
-    const y=1.1+Math.random()*0.12;
-    const z=0.1+Math.random()*0.04;
-    const b=0.7+Math.random()*0.3;
-    positions.push(x,y,z);
-    colors.push(heartCol.r*b,heartCol.g*b,heartCol.b*b);
-  }
-
-  // AMBIENT PARTICLES — sparse floating around body
-  for(let i=0;i<80;i++){
-    const r2=1.0+Math.random()*0.7;
-    const theta=Math.random()*Math.PI*2;
-    const phi=Math.acos(2*Math.random()-1);
-    positions.push(r2*Math.sin(phi)*Math.cos(theta),r2*Math.cos(phi)*0.65+0.85,r2*Math.sin(phi)*Math.sin(theta));
-    const b=0.04+Math.random()*0.1;
-    colors.push(baseCol.r*b,baseCol.g*b,baseCol.b*b);
-  }
-
-  // ── BUILD GEOMETRY ────────────────────────────────────
-  const geo=new THREE.BufferGeometry();
-  geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
-  geo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
-  const mat=new THREE.PointsMaterial({size:0.018,vertexColors:true,sizeAttenuation:true,transparent:true,opacity:.92});
-  const pts=new THREE.Points(geo,mat);
-
-  const group=new THREE.Group();
-  group.add(pts);
-  scene.add(group);
-
-  // HOLOGRAPHIC RINGS
-  const makeRing=(r,y,op)=>{
-    const g=new THREE.TorusGeometry(r,0.005,6,80);
-    const m=new THREE.MeshBasicMaterial({color:baseCol,transparent:true,opacity:op});
-    const mesh=new THREE.Mesh(g,m);
-    mesh.rotation.x=Math.PI/2;mesh.position.y=y;
-    return mesh;
-  };
-  const ring1=makeRing(0.30,-0.08,0.5);
-  const ring2=makeRing(0.22,-0.08,0.25);
-  const ring3=makeRing(0.42,-0.08,0.15);
-  group.add(ring1,ring2,ring3);
-
-  // GROUND GLOW
-  const gGeo=new THREE.CircleGeometry(0.32,64);
-  const gMat=new THREE.MeshBasicMaterial({color:baseCol,transparent:true,opacity:.06,side:THREE.DoubleSide});
-  const ground=new THREE.Mesh(gGeo,gMat);
-  ground.rotation.x=-Math.PI/2;ground.position.y=-0.09;
-  group.add(ground);
-
-  // ── MOUSE INTERACTION ─────────────────────────────────
-  let mouseX=0,mouseY=0,targetRotX=0,targetRotY=0;
-  const figCard=$('figure-card');
-  figCard.addEventListener('mousemove',e=>{
-    const rect=figCard.getBoundingClientRect();
-    mouseX=(e.clientX-rect.left)/rect.width-.5;
-    mouseY=(e.clientY-rect.top)/rect.height-.5;
-  });
-  figCard.addEventListener('mouseleave',()=>{mouseX=0;mouseY=0;});
-
-  // ── ANIMATE ───────────────────────────────────────────
-  let t=0;
-  function animate(){
-    requestAnimationFrame(animate);
-    t+=0.005;
-
-    // Auto-rotate + mouse influence
-    targetRotY+=(mouseX*0.8-targetRotY)*0.06;
-    targetRotX+=(-mouseY*0.3-targetRotX)*0.06;
-    group.rotation.y=t*0.3+targetRotY;
-    group.rotation.x=targetRotX;
-
-    // Rings pulse
-    ring1.rotation.z=t*0.5;
-    ring2.rotation.z=-t*0.4;
-    ring3.rotation.z=t*0.2;
-    ring1.scale.setScalar(1+Math.sin(t*1.5)*0.04);
-    ring2.scale.setScalar(1+Math.sin(t*1.5+1)*0.05);
-
-    // Particle breathing
-    mat.opacity=0.88+Math.sin(t*1.2)*0.1;
-    mat.size=0.018*(0.95+Math.sin(t*1.8)*0.05);
-
-    renderer.render(scene,camera);
-  }
-  animate();
+} catch(e) {
+  console.warn('3D body error:', e);
 }
 // ═══════════════════════════════════════════════════════════
 //  AI CHAT
