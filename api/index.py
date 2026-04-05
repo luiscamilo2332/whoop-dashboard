@@ -1122,7 +1122,7 @@ function toggleW(id){const el=document.getElementById(id),d=document.getElementB
 }
 
 // ═══════════════════════════════════════════════════════════
-//  THREE.JS — PARTICLE HUMAN BODY
+//  THREE.JS — PARTICLE HUMAN BODY v2 (surface-only hologram)
 // ═══════════════════════════════════════════════════════════
 {
   const canvas=$('three-canvas');
@@ -1131,204 +1131,244 @@ function toggleW(id){const el=document.getElementById(id),d=document.getElementB
   renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
 
   const scene=new THREE.Scene();
-  const camera=new THREE.PerspectiveCamera(38,1,0.1,100);
-  camera.position.set(0,0.85,3.2);
-  camera.lookAt(0,0.85,0);
+  const camera=new THREE.PerspectiveCamera(36,1,0.1,100);
+  camera.position.set(0,0.9,3.0);
+  camera.lookAt(0,0.9,0);
 
   function resize(){
     const w=canvas.parentElement.clientWidth,h=canvas.parentElement.clientHeight;
-    renderer.setSize(w,h);
-    camera.aspect=w/h;
-    camera.updateProjectionMatrix();
+    renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();
   }
   resize();
   window.addEventListener('resize',resize);
 
-  // Color based on recovery
-  const col=new THREE.Color(rCol(currentScore));
-  const colDim=col.clone().multiplyScalar(0.4);
+  const baseCol=new THREE.Color(rCol(currentScore));
+  const heartCol=new THREE.Color(r0&&r0.score&&r0.score.hrv_rmssd_milli>50?'#00e5c3':r0&&r0.score&&r0.score.hrv_rmssd_milli>30?'#f59e0b':'#ef4444');
+  const headCol=new THREE.Color(sl0&&sl0.score&&(sl0.score.sleep_performance_percentage||0)>70?'#a78bfa':'#f59e0b');
+  const legCol=new THREE.Color(cycs.length&&cycs[0].score&&cycs[0].score.strain>12?'#ef4444':'#3b82f6');
 
-  // ── Generate human body points ────────────────────────
-  const positions=[];
-  const colors=[];
+  // ── SURFACE-ONLY PARTICLE GENERATION ─────────────────
+  const positions=[], colors=[];
 
-  function addSphere(cx,cy,cz,r,n,bright=1){
+  // Fibonacci sphere — uniform surface distribution
+  function fibSphere(cx,cy,cz,r,n,col,bright=1){
     for(let i=0;i<n;i++){
-      const theta=Math.random()*Math.PI*2;
-      const phi=Math.acos(2*Math.random()-1);
+      const phi=Math.acos(1-2*(i+.5)/n);
+      const theta=Math.PI*(1+Math.sqrt(5))*i;
       positions.push(cx+r*Math.sin(phi)*Math.cos(theta),cy+r*Math.cos(phi),cz+r*Math.sin(phi)*Math.sin(theta));
-      const c=bright>0.5?col:colDim;
-      colors.push(c.r*bright,c.g*bright,c.b*bright);
+      const b=(0.6+Math.random()*0.4)*bright;
+      colors.push(col.r*b,col.g*b,col.b*b);
     }
   }
 
-  function addCylinder(cx,cy,cz,r,h,n,tx=0,tz=0,bright=1){
+  // Surface cylinder — points only on the curved surface
+  function surfCyl(cx,cy,cz,r,rz,h,n,col,bright=1,tx=0,tz=0){
     for(let i=0;i<n;i++){
       const theta=Math.random()*Math.PI*2;
       const t=Math.random();
       const x=r*Math.cos(theta);
-      const z=r*Math.sin(theta);
-      positions.push(cx+x+t*tx*h,cy+t*h,cz+z+t*tz*h);
-      const c=bright>0.5?col:colDim;
-      colors.push(c.r*bright,c.g*bright,c.b*bright);
+      const z=rz*Math.sin(theta);
+      positions.push(cx+x+t*h*tx,cy+t*h,cz+z+t*h*tz);
+      const b=(0.55+Math.random()*0.45)*bright;
+      colors.push(col.r*b,col.g*b,col.b*b);
     }
   }
 
-  function addEllipsoid(cx,cy,cz,rx,ry,rz,n,bright=1){
+  // Surface ellipsoid — only outer shell
+  function surfEllipsoid(cx,cy,cz,rx,ry,rz,n,col,bright=1){
+    for(let i=0;i<n;i++){
+      const u=Math.random()*Math.PI*2;
+      const v=Math.acos(2*Math.random()-1);
+      positions.push(cx+rx*Math.sin(v)*Math.cos(u),cy+ry*Math.cos(v),cz+rz*Math.sin(v)*Math.sin(u));
+      const b=(0.55+Math.random()*0.45)*bright;
+      colors.push(col.r*b,col.g*b,col.b*b);
+    }
+  }
+
+  // Ring / halo
+  function ring(cx,cy,cz,r,thickness,n,col,bright=1){
     for(let i=0;i<n;i++){
       const theta=Math.random()*Math.PI*2;
-      const phi=Math.acos(2*Math.random()-1);
-      positions.push(cx+rx*Math.sin(phi)*Math.cos(theta),cy+ry*Math.cos(phi),cz+rz*Math.sin(phi)*Math.sin(theta));
-      const c=bright>0.5?col:colDim;
-      colors.push(c.r*bright,c.g*bright,c.b*bright);
+      const dr=(Math.random()-.5)*thickness;
+      positions.push(cx+(r+dr)*Math.cos(theta),cy+(Math.random()-.5)*thickness*.3,cz+(r+dr)*Math.sin(theta));
+      const b=(0.6+Math.random()*0.4)*bright;
+      colors.push(col.r*b,col.g*b,col.b*b);
     }
   }
 
-  // HEAD
-  addSphere(0,1.72,0,0.16,90,.95);
+  // ── BODY PARTS ────────────────────────────────────────
+  // HEAD (fibonacci sphere — most uniform)
+  fibSphere(0,1.72,0,0.155,90,headCol,1.0);
+  // Extra head glow ring
+  ring(0,1.72,0,0.18,0.02,20,headCol,0.5);
+
   // NECK
-  addCylinder(0,1.52,0,0.055,0.16,18,0,0,.7);
-  // SHOULDERS
-  addEllipsoid(-0.26,1.43,0,0.09,0.07,0.07,25,.9);
-  addEllipsoid(0.26,1.43,0,0.09,0.07,0.07,25,.9);
-  // CHEST / TORSO upper
-  for(let i=0;i<180;i++){
-    const t=Math.random();
-    const w=0.19-t*0.04;
-    const dw=w*0.6;
-    const theta=Math.random()*Math.PI*2;
-    const bright=0.7+Math.random()*0.3;
-    positions.push(w*Math.cos(theta),1.05+t*0.38,dw*Math.sin(theta));
-    colors.push(col.r*bright,col.g*bright,col.b*bright);
-  }
-  // ABDOMEN
-  for(let i=0;i<120;i++){
-    const t=Math.random();
-    const w=0.15-t*0.02;
-    const theta=Math.random()*Math.PI*2;
-    const bright=0.6+Math.random()*0.3;
-    positions.push(w*Math.cos(theta),0.68+t*0.35,w*0.7*Math.sin(theta));
-    colors.push(col.r*bright,col.g*bright,col.b*bright);
-  }
-  // HIPS
-  for(let i=0;i<60;i++){
-    const theta=Math.random()*Math.PI*2;
-    const bright=0.65+Math.random()*0.25;
-    positions.push(0.2*Math.cos(theta),0.62+Math.random()*0.08,0.14*Math.sin(theta));
-    colors.push(col.r*bright,col.g*bright,col.b*bright);
-  }
-  // UPPER ARMS
-  addCylinder(-0.27,1.15,0,0.055,0.32,50,-0.28,0,.8);
-  addCylinder(0.27,1.15,0,0.055,0.32,50,0.28,0,.8);
-  // LOWER ARMS
-  addCylinder(-0.36,0.84,0,0.04,0.32,40,-0.06,0,.75);
-  addCylinder(0.36,0.84,0,0.04,0.32,40,0.06,0,.75);
-  // HANDS
-  addSphere(-0.38,0.49,0,0.055,20,.7);
-  addSphere(0.38,0.49,0,0.055,20,.7);
-  // UPPER LEGS
-  addCylinder(-0.1,0.38,0,0.075,0.32,75,0,0,.8);
-  addCylinder(0.1,0.38,0,0.075,0.32,75,0,0,.8);
-  // LOWER LEGS
-  addCylinder(-0.1,0.06,0,0.055,0.34,55,0,0,.7);
-  addCylinder(0.1,0.06,0,0.055,0.34,55,0,0,.7);
-  // FEET
-  for(let i=0;i<25;i++){
-    positions.push(-0.1+(Math.random()-.5)*0.1,-.02,-(Math.random()*.14));
-    colors.push(col.r*.65,col.g*.65,col.b*.65);
-    positions.push(0.1+(Math.random()-.5)*0.1,-.02,-(Math.random()*.14));
-    colors.push(col.r*.65,col.g*.65,col.b*.65);
+  surfCyl(0,1.54,0,0.055,0.04,0.16,16,baseCol,0.8);
+
+  // SHOULDERS (wider ellipsoids)
+  surfEllipsoid(-0.27,1.44,0,0.1,0.075,0.07,28,baseCol,0.9);
+  surfEllipsoid(0.27,1.44,0,0.1,0.075,0.07,28,baseCol,0.9);
+
+  // CHEST — cross-section slices for clear outline
+  for(let slice=0;slice<12;slice++){
+    const t=slice/11;
+    const y=1.05+t*0.38;
+    const rx=0.21-t*0.05;
+    const rz=0.13-t*0.03;
+    const n=Math.round(14+t*4);
+    for(let i=0;i<n;i++){
+      const theta=(i/n)*Math.PI*2;
+      const col2=slice<3?heartCol:baseCol;
+      const b=0.6+Math.random()*0.4;
+      positions.push(rx*Math.cos(theta),y,rz*Math.sin(theta));
+      colors.push(col2.r*b,col2.g*b,col2.b*b);
+    }
   }
 
-  // ── BODY ZONES BASED ON DATA ─────────────────────────
-  // Heart zone (chest) - pulses with HRV
-  const hrvScore=r0&&r0.score?Math.min(1,r0.score.hrv_rmssd_milli/80):0.5;
-  const heartCol=new THREE.Color(hrvScore>0.6?'#00e5c3':hrvScore>0.3?'#f59e0b':'#ef4444');
-  for(let i=0;i<40;i++){
-    const theta=Math.random()*Math.PI*2;
-    const r2=0.06+Math.random()*0.04;
-    positions.push(r2*Math.cos(theta)*0.8,(1.1+Math.random()*0.15),r2*Math.sin(theta)*0.4);
+  // ABDOMEN — cross-sections
+  for(let slice=0;slice<8;slice++){
+    const t=slice/7;
+    const y=0.67+t*0.35;
+    const rx=0.16-t*0.02;
+    const rz=0.1;
+    for(let i=0;i<12;i++){
+      const theta=(i/12)*Math.PI*2;
+      const b=0.5+Math.random()*0.4;
+      positions.push(rx*Math.cos(theta),y,rz*Math.sin(theta));
+      colors.push(baseCol.r*b,baseCol.g*b,baseCol.b*b);
+    }
+  }
+
+  // HIPS — wider cross-section
+  for(let i=0;i<24;i++){
+    const theta=(i/24)*Math.PI*2;
+    const b=0.6+Math.random()*0.35;
+    positions.push(0.21*Math.cos(theta),0.63,0.15*Math.sin(theta));
+    colors.push(baseCol.r*b,baseCol.g*b,baseCol.b*b);
+  }
+
+  // UPPER ARMS — surface cylinders with tilt
+  surfCyl(-0.27,1.14,0,0.055,0.04,0.32,44,baseCol,0.85,-0.28,0);
+  surfCyl(0.27,1.14,0,0.055,0.04,0.32,44,baseCol,0.85,0.28,0);
+  // ELBOW joints
+  fibSphere(-0.36,0.83,0,0.045,18,baseCol,0.75);
+  fibSphere(0.36,0.83,0,0.045,18,baseCol,0.75);
+  // LOWER ARMS
+  surfCyl(-0.36,0.84,0,0.04,0.03,0.32,36,baseCol,0.75,-0.05,0);
+  surfCyl(0.36,0.84,0,0.04,0.03,0.32,36,baseCol,0.75,0.05,0);
+  // HANDS
+  fibSphere(-0.37,0.5,0,0.05,22,baseCol,0.7);
+  fibSphere(0.37,0.5,0,0.05,22,baseCol,0.7);
+
+  // UPPER LEGS — surface cylinders
+  surfCyl(-0.1,0.35,0,0.075,0.055,0.28,52,legCol,0.85);
+  surfCyl(0.1,0.35,0,0.075,0.055,0.28,52,legCol,0.85);
+  // KNEE joints
+  fibSphere(-0.1,0.07,0,0.06,20,legCol,0.7);
+  fibSphere(0.1,0.07,0,0.06,20,legCol,0.7);
+  // LOWER LEGS
+  surfCyl(-0.1,0.07,0,0.05,0.04,0.34,44,legCol,0.7);
+  surfCyl(0.1,0.07,0,0.05,0.04,0.34,44,legCol,0.7);
+  // FEET — tapered ellipsoids
+  surfEllipsoid(-0.1,-0.04,-0.07,0.055,0.03,0.1,18,legCol,0.65);
+  surfEllipsoid(0.1,-0.04,-0.07,0.055,0.03,0.1,18,legCol,0.65);
+
+  // SPINE DOTS — vertical line of particles
+  for(let i=0;i<18;i++){
+    const y=0.1+i*0.09;
+    const b=0.3+Math.random()*0.3;
+    positions.push((Math.random()-.5)*0.01,y,(Math.random()-.5)*0.01+0.12);
+    colors.push(baseCol.r*b,baseCol.g*b,baseCol.b*b);
+  }
+
+  // HEART PULSE ZONE — concentrated bright particles on chest
+  for(let i=0;i<35;i++){
+    const x=(Math.random()-.5)*0.08-0.05;
+    const y=1.1+Math.random()*0.12;
+    const z=0.1+Math.random()*0.04;
     const b=0.7+Math.random()*0.3;
+    positions.push(x,y,z);
     colors.push(heartCol.r*b,heartCol.g*b,heartCol.b*b);
   }
-  // Head zone - based on sleep performance
-  const sleepScore=sl0&&sl0.score?Math.min(1,(sl0.score.sleep_performance_percentage||0)/100):0.5;
-  const headCol=new THREE.Color(sleepScore>0.7?'#a78bfa':sleepScore>0.4?'#f59e0b':'#ef4444');
-  for(let i=0;i<30;i++){
+
+  // AMBIENT PARTICLES — sparse floating around body
+  for(let i=0;i<80;i++){
+    const r2=1.0+Math.random()*0.7;
     const theta=Math.random()*Math.PI*2;
     const phi=Math.acos(2*Math.random()-1);
-    const r2=0.17;
-    positions.push(r2*Math.sin(phi)*Math.cos(theta),1.72+r2*Math.cos(phi),r2*Math.sin(phi)*Math.sin(theta));
-    const b=0.5+Math.random()*0.5;
-    colors.push(headCol.r*b,headCol.g*b,headCol.b*b);
-  }
-  // Legs zone - based on strain
-  const strainVal=cycs.length&&cycs[0].score?cycs[0].score.strain:0;
-  const strainNorm=Math.min(1,strainVal/21);
-  const legCol=new THREE.Color(strainNorm>0.6?'#ef4444':strainNorm>0.3?'#f59e0b':'#3b82f6');
-  for(let i=0;i<50;i++){
-    const side=i%2===0?-0.1:0.1;
-    positions.push(side+(Math.random()-.5)*0.06,0.1+Math.random()*0.6,(Math.random()-.5)*0.08);
-    const b=0.5+Math.random()*0.5;
-    colors.push(legCol.r*b,legCol.g*b,legCol.b*b);
+    positions.push(r2*Math.sin(phi)*Math.cos(theta),r2*Math.cos(phi)*0.65+0.85,r2*Math.sin(phi)*Math.sin(theta));
+    const b=0.04+Math.random()*0.1;
+    colors.push(baseCol.r*b,baseCol.g*b,baseCol.b*b);
   }
 
-  // Ambient floating particles
-  for(let i=0;i<120;i++){
-    const r=1.2+Math.random()*0.8;
-    const theta=Math.random()*Math.PI*2;
-    const phi=Math.acos(2*Math.random()-1);
-    positions.push(r*Math.sin(phi)*Math.cos(theta),r*Math.cos(phi)*0.7+0.5,r*Math.sin(phi)*Math.sin(theta));
-    const b=0.08+Math.random()*0.15;
-    colors.push(col.r*b,col.g*b,col.b*b);
-  }
-
+  // ── BUILD GEOMETRY ────────────────────────────────────
   const geo=new THREE.BufferGeometry();
   geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
   geo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+  const mat=new THREE.PointsMaterial({size:0.018,vertexColors:true,sizeAttenuation:true,transparent:true,opacity:.92});
+  const pts=new THREE.Points(geo,mat);
 
-  const mat=new THREE.PointsMaterial({size:0.022,vertexColors:true,sizeAttenuation:true,transparent:true,opacity:.9});
-  const points=new THREE.Points(geo,mat);
   const group=new THREE.Group();
-  group.add(points);
-  group.scale.setScalar(0.82);
-  group.position.y=0;
+  group.add(pts);
   scene.add(group);
 
-  // Holographic ring at base
-  const ringGeo=new THREE.TorusGeometry(0.32,0.006,8,80);
-  const ringMat=new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.5});
-  const ring=new THREE.Mesh(ringGeo,ringMat);
-  ring.rotation.x=Math.PI/2;
-  ring.position.y=-0.18;
-  group.add(ring);
+  // HOLOGRAPHIC RINGS
+  const makeRing=(r,y,op)=>{
+    const g=new THREE.TorusGeometry(r,0.005,6,80);
+    const m=new THREE.MeshBasicMaterial({color:baseCol,transparent:true,opacity:op});
+    const mesh=new THREE.Mesh(g,m);
+    mesh.rotation.x=Math.PI/2;mesh.position.y=y;
+    return mesh;
+  };
+  const ring1=makeRing(0.30,-0.08,0.5);
+  const ring2=makeRing(0.22,-0.08,0.25);
+  const ring3=makeRing(0.42,-0.08,0.15);
+  group.add(ring1,ring2,ring3);
 
-  // Animate
+  // GROUND GLOW
+  const gGeo=new THREE.CircleGeometry(0.32,64);
+  const gMat=new THREE.MeshBasicMaterial({color:baseCol,transparent:true,opacity:.06,side:THREE.DoubleSide});
+  const ground=new THREE.Mesh(gGeo,gMat);
+  ground.rotation.x=-Math.PI/2;ground.position.y=-0.09;
+  group.add(ground);
+
+  // ── MOUSE INTERACTION ─────────────────────────────────
+  let mouseX=0,mouseY=0,targetRotX=0,targetRotY=0;
+  const figCard=$('figure-card');
+  figCard.addEventListener('mousemove',e=>{
+    const rect=figCard.getBoundingClientRect();
+    mouseX=(e.clientX-rect.left)/rect.width-.5;
+    mouseY=(e.clientY-rect.top)/rect.height-.5;
+  });
+  figCard.addEventListener('mouseleave',()=>{mouseX=0;mouseY=0;});
+
+  // ── ANIMATE ───────────────────────────────────────────
   let t=0;
-  // Holographic ground circle
-  const circleGeo=new THREE.RingGeometry(0.28,0.32,64);
-  const circleMat=new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.2,side:THREE.DoubleSide});
-  const circle=new THREE.Mesh(circleGeo,circleMat);
-  circle.rotation.x=-Math.PI/2;circle.position.y=-0.18;
-  group.add(circle);
-
   function animate(){
     requestAnimationFrame(animate);
     t+=0.005;
-    group.rotation.y=t*0.35;
-    ring.rotation.z=t*0.6;
-    circle.rotation.z=-t*0.2;
-    // Breathing pulse on overall figure
-    const pulse=0.82+Math.sin(t*1.2)*0.008;
-    group.scale.setScalar(pulse);
-    mat.opacity=0.82+Math.sin(t*1.8)*0.12;
-    mat.size=0.022*(0.95+Math.sin(t*2)*0.05);
-    ring.scale.setScalar(1+Math.sin(t*1.5)*0.06);
+
+    // Auto-rotate + mouse influence
+    targetRotY+=(mouseX*0.8-targetRotY)*0.06;
+    targetRotX+=(-mouseY*0.3-targetRotX)*0.06;
+    group.rotation.y=t*0.3+targetRotY;
+    group.rotation.x=targetRotX;
+
+    // Rings pulse
+    ring1.rotation.z=t*0.5;
+    ring2.rotation.z=-t*0.4;
+    ring3.rotation.z=t*0.2;
+    ring1.scale.setScalar(1+Math.sin(t*1.5)*0.04);
+    ring2.scale.setScalar(1+Math.sin(t*1.5+1)*0.05);
+
+    // Particle breathing
+    mat.opacity=0.88+Math.sin(t*1.2)*0.1;
+    mat.size=0.018*(0.95+Math.sin(t*1.8)*0.05);
+
     renderer.render(scene,camera);
   }
   animate();
 }
-
 // ═══════════════════════════════════════════════════════════
 //  AI CHAT
 // ═══════════════════════════════════════════════════════════
