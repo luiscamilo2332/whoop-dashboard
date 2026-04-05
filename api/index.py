@@ -1122,163 +1122,234 @@ function toggleW(id){const el=document.getElementById(id),d=document.getElementB
 }
 
 // ═══════════════════════════════════════════════════════════
-//  THREE.JS — PARTICLE BODY v5 (compact, junticas)
+//  2D CANVAS HOLOGRAM BODY — precise wireframe human
+//  No Three.js. Manual 3D projection. Full control.
 // ═══════════════════════════════════════════════════════════
-try {
-  const isMobile = window.innerWidth < 768;
+{
   const figCard = $('figure-card');
-  if(!isMobile) {
+  const canvas  = $('three-canvas');
+  const ctx     = canvas.getContext('2d');
 
-  const canvas = $('three-canvas');
-  const renderer = new THREE.WebGLRenderer({canvas, alpha:true, antialias:true});
-  renderer.setClearColor(0x000000, 0);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  const scene = new THREE.Scene();
-  // Closer camera, tighter FOV = figure fills frame and looks compact
-  const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100);
-  camera.position.set(0, 0.85, 2.4);
-  camera.lookAt(0, 0.85, 0);
-
-  function resize() {
-    const w = figCard.clientWidth, h = figCard.clientHeight;
-    renderer.setSize(w, h); camera.aspect=w/h; camera.updateProjectionMatrix();
-  }
-  resize(); window.addEventListener('resize', resize);
-
-  const baseCol  = new THREE.Color(rCol(currentScore));
+  // Colors from WHOOP data
+  const baseRGB  = rCol(currentScore) === '#22c55e' ? [0,229,195] : rCol(currentScore) === '#f59e0b' ? [245,158,11] : [239,68,68];
   const hrvMs    = r0&&r0.score ? r0.score.hrv_rmssd_milli : 40;
-  const heartCol = new THREE.Color(hrvMs>50?'#00e5c3':hrvMs>30?'#f59e0b':'#ef4444');
+  const heartRGB = hrvMs>50 ? [0,229,195] : hrvMs>30 ? [245,158,11] : [239,68,68];
   const sleepP   = sl0&&sl0.score ? (sl0.score.sleep_performance_percentage||0) : 60;
-  const headCol  = new THREE.Color(sleepP>70?'#a78bfa':'#f59e0b');
+  const headRGB  = sleepP>70 ? [167,139,250] : [245,158,11];
   const strV     = cycs.length&&cycs[0].score ? cycs[0].score.strain : 8;
-  const legCol   = new THREE.Color(strV>12?'#ef4444':strV>7?'#f59e0b':'#3b82f6');
+  const legRGB   = strV>12 ? [239,68,68] : strV>7 ? [245,158,11] : [59,130,246];
 
-  const positions=[], cols=[];
+  function rgb(arr,a=1){ return `rgba(${arr[0]},${arr[1]},${arr[2]},${a})`; }
 
-  // Volumetric sphere (fills inside — gives solid cloud look)
-  function vol_sphere(cx,cy,cz, r, n, col, bright=1) {
-    for(let i=0;i<n;i++){
-      // Random point inside sphere using rejection sampling
-      let x,y,z;
-      do { x=(Math.random()-.5)*2; y=(Math.random()-.5)*2; z=(Math.random()-.5)*2; }
-      while(x*x+y*y+z*z > 1);
-      const b=(0.4+Math.random()*0.6)*bright;
-      positions.push(cx+x*r, cy+y*r, cz+z*r);
-      cols.push(col.r*b, col.g*b, col.b*b);
-    }
+  function resize(){
+    canvas.width  = figCard.clientWidth;
+    canvas.height = figCard.clientHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  // ── 3D BODY DEFINITION ────────────────────────────────
+  // Each ring: [cx, cy, cz, rx, rz, segments, colorRGB, alpha]
+  // Y axis: feet=-1, head=+1 (mapped to canvas)
+  const rings = [
+    // HEAD rings (3 perpendicular circles)
+    {cx:0,cy:0.82,cz:0,rx:0.18,rz:0.18,n:28,col:headRGB,  a:0.9},
+    {cx:0,cy:0.82,cz:0,rx:0.18,rz:0.01,n:24,col:headRGB,  a:0.4},  // vertical
+    {cx:0,cy:0.82,cz:0,rx:0.01,rz:0.18,n:24,col:headRGB,  a:0.4},  // sagittal
+    // NECK
+    {cx:0,cy:0.62,cz:0,rx:0.068,rz:0.055,n:14,col:baseRGB,a:0.7},
+    // SHOULDERS
+    {cx:0,cy:0.55,cz:0,rx:0.31, rz:0.18, n:32,col:baseRGB,a:0.75},
+    // CHEST (heart zone)
+    {cx:0,cy:0.44,cz:0,rx:0.27, rz:0.16, n:30,col:heartRGB,a:0.85},
+    {cx:0,cy:0.33,cz:0,rx:0.26, rz:0.15, n:28,col:heartRGB,a:0.75},
+    {cx:0,cy:0.22,cz:0,rx:0.25, rz:0.15, n:28,col:baseRGB, a:0.65},
+    // ABDOMEN
+    {cx:0,cy:0.10,cz:0,rx:0.22, rz:0.13, n:26,col:baseRGB, a:0.60},
+    {cx:0,cy:-0.01,cz:0,rx:0.21,rz:0.13, n:24,col:baseRGB, a:0.55},
+    // HIPS
+    {cx:0,cy:-0.12,cz:0,rx:0.26,rz:0.16, n:28,col:baseRGB, a:0.70},
+    // UPPER ARMS
+    {cx:-0.32,cy:0.50,cz:0,rx:0.07,rz:0.055,n:12,col:baseRGB,a:0.7},
+    {cx:-0.34,cy:0.36,cz:0,rx:0.065,rz:0.05,n:12,col:baseRGB,a:0.65},
+    {cx:-0.36,cy:0.22,cz:0,rx:0.06, rz:0.048,n:12,col:baseRGB,a:0.60},
+    {cx: 0.32,cy:0.50,cz:0,rx:0.07,rz:0.055,n:12,col:baseRGB,a:0.7},
+    {cx: 0.34,cy:0.36,cz:0,rx:0.065,rz:0.05,n:12,col:baseRGB,a:0.65},
+    {cx: 0.36,cy:0.22,cz:0,rx:0.06, rz:0.048,n:12,col:baseRGB,a:0.60},
+    // FOREARMS
+    {cx:-0.36,cy:0.08,cz:0,rx:0.052,rz:0.04,n:10,col:baseRGB,a:0.55},
+    {cx:-0.36,cy:-0.06,cz:0,rx:0.048,rz:0.036,n:10,col:baseRGB,a:0.50},
+    {cx: 0.36,cy:0.08,cz:0,rx:0.052,rz:0.04,n:10,col:baseRGB,a:0.55},
+    {cx: 0.36,cy:-0.06,cz:0,rx:0.048,rz:0.036,n:10,col:baseRGB,a:0.50},
+    // HANDS
+    {cx:-0.36,cy:-0.18,cz:0,rx:0.055,rz:0.042,n:10,col:baseRGB,a:0.45},
+    {cx: 0.36,cy:-0.18,cz:0,rx:0.055,rz:0.042,n:10,col:baseRGB,a:0.45},
+    // UPPER LEGS
+    {cx:-0.12,cy:-0.22,cz:0,rx:0.095,rz:0.075,n:14,col:legRGB,a:0.80},
+    {cx:-0.12,cy:-0.34,cz:0,rx:0.090,rz:0.070,n:14,col:legRGB,a:0.75},
+    {cx:-0.12,cy:-0.46,cz:0,rx:0.085,rz:0.065,n:14,col:legRGB,a:0.70},
+    {cx: 0.12,cy:-0.22,cz:0,rx:0.095,rz:0.075,n:14,col:legRGB,a:0.80},
+    {cx: 0.12,cy:-0.34,cz:0,rx:0.090,rz:0.070,n:14,col:legRGB,a:0.75},
+    {cx: 0.12,cy:-0.46,cz:0,rx:0.085,rz:0.065,n:14,col:legRGB,a:0.70},
+    // KNEES
+    {cx:-0.12,cy:-0.56,cz:0,rx:0.076,rz:0.060,n:12,col:legRGB,a:0.82},
+    {cx: 0.12,cy:-0.56,cz:0,rx:0.076,rz:0.060,n:12,col:legRGB,a:0.82},
+    // LOWER LEGS
+    {cx:-0.12,cy:-0.67,cz:0,rx:0.064,rz:0.050,n:12,col:legRGB,a:0.70},
+    {cx:-0.12,cy:-0.78,cz:0,rx:0.058,rz:0.045,n:12,col:legRGB,a:0.65},
+    {cx:-0.12,cy:-0.88,cz:0,rx:0.054,rz:0.042,n:12,col:legRGB,a:0.60},
+    {cx: 0.12,cy:-0.67,cz:0,rx:0.064,rz:0.050,n:12,col:legRGB,a:0.70},
+    {cx: 0.12,cy:-0.78,cz:0,rx:0.058,rz:0.045,n:12,col:legRGB,a:0.65},
+    {cx: 0.12,cy:-0.88,cz:0,rx:0.054,rz:0.042,n:12,col:legRGB,a:0.60},
+    // FEET
+    {cx:-0.12,cy:-0.96,cz:-0.04,rx:0.07,rz:0.12,n:12,col:legRGB,a:0.55},
+    {cx: 0.12,cy:-0.96,cz:-0.04,rx:0.07,rz:0.12,n:12,col:legRGB,a:0.55},
+  ];
+
+  // Skeleton lines [from, to] as joint positions
+  const skeleton = [
+    // Spine
+    [[0,0.82,0],[0,0.62,0]], [[0,0.62,0],[0,0.44,0]],
+    [[0,0.44,0],[0,0.22,0]], [[0,0.22,0],[0,-0.12,0]],
+    // Collar
+    [[0,0.62,0],[-0.32,0.50,0]], [[0,0.62,0],[0.32,0.50,0]],
+    // Arms
+    [[-0.32,0.50,0],[-0.36,0.08,0]], [[-0.36,0.08,0],[-0.36,-0.18,0]],
+    [[0.32,0.50,0],[0.36,0.08,0]],  [[0.36,0.08,0],[0.36,-0.18,0]],
+    // Hips to legs
+    [[0,-0.12,0],[-0.12,-0.22,0]], [[0,-0.12,0],[0.12,-0.22,0]],
+    // Legs
+    [[-0.12,-0.22,0],[-0.12,-0.56,0]], [[-0.12,-0.56,0],[-0.12,-0.96,0]],
+    [[0.12,-0.22,0],[0.12,-0.56,0]],   [[0.12,-0.56,0],[0.12,-0.96,0]],
+  ];
+
+  // ── 3D PROJECTION ─────────────────────────────────────
+  function project3D(x, y, z, rotY, rotX, w, h) {
+    // Rotate Y
+    const rx = x*Math.cos(rotY) + z*Math.sin(rotY);
+    const rz1= -x*Math.sin(rotY)+ z*Math.cos(rotY);
+    // Rotate X
+    const ry = y*Math.cos(rotX) - rz1*Math.sin(rotX);
+    const rz = y*Math.sin(rotX) + rz1*Math.cos(rotX);
+    // Perspective
+    const fov  = Math.min(w, h) * 0.55;
+    const dist = 2.8 + rz;
+    const sx   = w/2 + (rx/dist)*fov;
+    const sy   = h*0.48 - (ry/dist)*fov;
+    const size = 1.2/dist;
+    return {x:sx, y:sy, size, depth:rz};
   }
 
-  // Compact cylinder (no tilt, straight up) — key fix vs previous
-  function vol_cyl(cx,cy,cz, r,rz, h, n, col, bright=1) {
-    for(let i=0;i<n;i++){
-      // Random point inside elliptical cylinder
-      let x,z;
-      do { x=(Math.random()-.5)*2; z=(Math.random()-.5)*2; }
-      while(x*x+z*z > 1);
-      const b=(0.4+Math.random()*0.6)*bright;
-      positions.push(cx+x*r, cy+Math.random()*h, cz+z*rz);
-      cols.push(col.r*b, col.g*b, col.b*b);
-    }
-  }
-
-  // ── BODY (compact proportions, scale 0.75 of real) ────
-  // Head
-  vol_sphere(0, 1.68, 0, 0.14, 70, headCol, 1.0);
-  // Neck
-  vol_cyl(0, 1.53, 0, 0.052, 0.04, 0.13, 16, baseCol, 0.8);
-  // Torso upper (chest)
-  vol_cyl(0, 1.02, 0, 0.19, 0.12, 0.42, 130, baseCol, 0.85);
-  // Heart zone highlight
-  vol_cyl(-0.04, 1.18, 0, 0.07, 0.05, 0.12, 30, heartCol, 1.0);
-  // Abdomen
-  vol_cyl(0, 0.66, 0, 0.155, 0.10, 0.35, 90, baseCol, 0.75);
-  // Hips
-  vol_cyl(0, 0.60, 0, 0.185, 0.13, 0.10, 40, baseCol, 0.82);
-  // Shoulders
-  vol_sphere(-0.25, 1.44, 0, 0.075, 22, baseCol, 0.9);
-  vol_sphere(0.25,  1.44, 0, 0.075, 22, baseCol, 0.9);
-  // Upper arms (straight, no tilt)
-  vol_cyl(-0.27, 1.08, 0, 0.052, 0.040, 0.36, 42, baseCol, 0.82);
-  vol_cyl(0.27,  1.08, 0, 0.052, 0.040, 0.36, 42, baseCol, 0.82);
-  // Elbows
-  vol_sphere(-0.30, 0.70, 0, 0.040, 14, baseCol, 0.78);
-  vol_sphere(0.30,  0.70, 0, 0.040, 14, baseCol, 0.78);
-  // Forearms (straight, angled slightly outward by offsetting center)
-  vol_cyl(-0.31, 0.36, 0, 0.038, 0.030, 0.33, 34, baseCol, 0.72);
-  vol_cyl(0.31,  0.36, 0, 0.038, 0.030, 0.33, 34, baseCol, 0.72);
-  // Hands
-  vol_sphere(-0.32, 0.22, 0, 0.042, 14, baseCol, 0.68);
-  vol_sphere(0.32,  0.22, 0, 0.042, 14, baseCol, 0.68);
-  // Upper legs
-  vol_cyl(-0.10, 0.24, 0, 0.070, 0.055, 0.34, 65, legCol, 0.85);
-  vol_cyl(0.10,  0.24, 0, 0.070, 0.055, 0.34, 65, legCol, 0.85);
-  // Knees
-  vol_sphere(-0.10,-0.12,0, 0.055, 18, legCol, 0.78);
-  vol_sphere(0.10, -0.12,0, 0.055, 18, legCol, 0.78);
-  // Lower legs
-  vol_cyl(-0.10,-0.14,0, 0.048, 0.038, 0.30, 48, legCol, 0.72);
-  vol_cyl(0.10, -0.14,0, 0.048, 0.038, 0.30, 48, legCol, 0.72);
-  // Feet
-  vol_sphere(-0.10,-0.46,0, 0.042, 12, legCol, 0.62);
-  vol_sphere(0.10, -0.46,0, 0.042, 12, legCol, 0.62);
-
-  // Ambient particles — very sparse, just a few
-  for(let i=0;i<40;i++){
-    const r2=0.7+Math.random()*0.5;
-    const theta=Math.random()*Math.PI*2;
-    const phi=Math.acos(2*Math.random()-1);
-    const b=0.04+Math.random()*0.08;
-    positions.push(r2*Math.sin(phi)*Math.cos(theta), r2*Math.cos(phi)*0.6+0.7, r2*Math.sin(phi)*Math.sin(theta));
-    cols.push(baseCol.r*b, baseCol.g*b, baseCol.b*b);
-  }
-
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions,3));
-  geo.setAttribute('color',    new THREE.Float32BufferAttribute(cols,3));
-  const mat = new THREE.PointsMaterial({size:0.014, vertexColors:true, sizeAttenuation:true, transparent:true, opacity:.92});
-  const pts  = new THREE.Points(geo,mat);
-  const group = new THREE.Group();
-  group.add(pts);
-  scene.add(group);
-
-  // Holographic rings
-  function holoRing(r,y,op,spd){
-    const g=new THREE.TorusGeometry(r,0.005,6,80);
-    const m=new THREE.MeshBasicMaterial({color:baseCol,transparent:true,opacity:op});
-    const mesh=new THREE.Mesh(g,m); mesh.rotation.x=Math.PI/2; mesh.position.y=y; mesh._s=spd;
-    group.add(mesh); return mesh;
-  }
-  const hr1=holoRing(0.25,-0.48,0.55, 0.5);
-  const hr2=holoRing(0.18,-0.48,0.28,-0.4);
-  const hr3=holoRing(0.34,-0.48,0.14, 0.2);
-
-  // Ground glow disc
-  const gd=new THREE.Mesh(new THREE.CircleGeometry(0.25,64), new THREE.MeshBasicMaterial({color:baseCol,transparent:true,opacity:.07,side:THREE.DoubleSide}));
-  gd.rotation.x=-Math.PI/2; gd.position.y=-0.48; group.add(gd);
-
-  // Mouse interaction
-  let mx=0,my=0,rotY=0,rotX=0;
+  // ── MOUSE ─────────────────────────────────────────────
+  let mx=0, my=0, rotY=0, rotX=0.04;
   figCard.addEventListener('mousemove',e=>{
     const r=figCard.getBoundingClientRect();
-    mx=(e.clientX-r.left)/r.width-.5; my=(e.clientY-r.top)/r.height-.5;
+    mx=(e.clientX-r.left)/r.width-.5;
+    my=(e.clientY-r.top)/r.height-.5;
   });
   figCard.addEventListener('mouseleave',()=>{mx=0;my=0;});
 
+  // ── HOLOGRAPHIC RING (base) ────────────────────────────
+  function drawHoloRing(t, w, h) {
+    const cx=w/2, cy=h*0.48+(0.96/2.8)*Math.min(w,h)*0.55+14;
+    const r1=36+Math.sin(t*1.5)*2;
+    const r2=26+Math.sin(t*1.5+1)*2;
+    const r3=48+Math.sin(t*1.5+2)*1.5;
+    [[r1,0.55,t],[r2,0.28,-t*0.8],[r3,0.14,t*0.4]].forEach(([r,a,rot])=>{
+      ctx.save();
+      ctx.translate(cx,cy);
+      ctx.rotate(rot);
+      ctx.beginPath();
+      ctx.ellipse(0,0,r,r*0.28,0,0,Math.PI*2);
+      ctx.strokeStyle=rgb(baseRGB,a);
+      ctx.lineWidth=1.5;
+      ctx.stroke();
+      ctx.restore();
+    });
+    // Ground glow
+    const grd=ctx.createRadialGradient(cx,cy,0,cx,cy,r1);
+    grd.addColorStop(0,rgb(baseRGB,0.06));
+    grd.addColorStop(1,rgb(baseRGB,0));
+    ctx.fillStyle=grd;
+    ctx.beginPath();
+    ctx.ellipse(cx,cy,r1,r1*0.28,0,0,Math.PI*2);
+    ctx.fill();
+  }
+
+  // ── SCAN LINE ─────────────────────────────────────────
+  let scanY = 0;
+
+  // ── ANIMATE ───────────────────────────────────────────
   let t=0;
   function animate(){
     requestAnimationFrame(animate); t+=0.005;
-    rotY+=(mx*.7-rotY)*.05; rotX+=(-my*.2-rotX)*.05;
-    group.rotation.y=t*.32+rotY;
-    group.rotation.x=rotX;
-    [hr1,hr2,hr3].forEach(r=>r.rotation.z+=r._s*.012);
-    hr1.scale.setScalar(1+Math.sin(t*1.5)*.04);
-    mat.opacity=.88+Math.sin(t*1.2)*.1;
-    renderer.render(scene,camera);
+    rotY += (mx*.7-rotY)*.05;
+    rotX += (-my*.15-rotX)*.05;
+    const totalRotY = t*0.32+rotY;
+
+    const W=canvas.width, H=canvas.height;
+    ctx.clearRect(0,0,W,H);
+
+    // Scan line (moving top to bottom)
+    scanY=(scanY+1.2)%(H*0.9);
+    const scanGrd=ctx.createLinearGradient(0,scanY-8,0,scanY+8);
+    scanGrd.addColorStop(0,rgb(baseRGB,0));
+    scanGrd.addColorStop(0.5,rgb(baseRGB,0.18));
+    scanGrd.addColorStop(1,rgb(baseRGB,0));
+    ctx.fillStyle=scanGrd;
+    ctx.fillRect(0,scanY,W,16);
+
+    // Skeleton lines (behind rings)
+    skeleton.forEach(([a,b])=>{
+      const pa=project3D(...a,totalRotY,rotX,W,H);
+      const pb=project3D(...b,totalRotY,rotX,W,H);
+      ctx.beginPath();
+      ctx.moveTo(pa.x,pa.y);
+      ctx.lineTo(pb.x,pb.y);
+      ctx.strokeStyle=rgb(baseRGB,0.18);
+      ctx.lineWidth=0.8;
+      ctx.stroke();
+    });
+
+    // Body rings — collect all points, sort by depth
+    const allPts=[];
+    rings.forEach(ring=>{
+      const pts=[];
+      for(let i=0;i<=ring.n;i++){
+        const a=(i/ring.n)*Math.PI*2;
+        const x3=ring.cx+ring.rx*Math.cos(a);
+        const y3=ring.cy;
+        const z3=ring.cz+ring.rz*Math.sin(a);
+        const p=project3D(x3,y3,z3,totalRotY,rotX,W,H);
+        pts.push(p);
+        allPts.push({...p, col:ring.col, a:ring.a});
+      }
+      // Draw the ring outline
+      ctx.beginPath();
+      pts.forEach((p,i)=>i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y));
+      ctx.closePath();
+      ctx.strokeStyle=rgb(ring.col, ring.a*0.55);
+      ctx.lineWidth=0.8;
+      ctx.stroke();
+    });
+
+    // Sort points by depth (painter's algorithm)
+    allPts.sort((a,b)=>a.depth-b.depth);
+
+    // Draw dots at each ring point
+    allPts.forEach(p=>{
+      const sz=Math.max(1.0, p.size*2.5);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, sz, 0, Math.PI*2);
+      ctx.fillStyle=rgb(p.col, p.a*(0.7+Math.sin(t*2)*0.15));
+      ctx.fill();
+    });
+
+    // Holographic rings at base
+    drawHoloRing(t, W, H);
   }
   animate();
-
-  } // end desktop
-} catch(e){ console.warn('3D:',e); }
+}
 // ═══════════════════════════════════════════════════════════
 //  AI CHAT
 // ═══════════════════════════════════════════════════════════
