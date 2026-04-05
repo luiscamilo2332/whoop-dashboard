@@ -7,9 +7,9 @@ import os
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'whoop-dash-secret-dev')
 
-CLIENT_ID     = os.environ.get('WHOOP_CLIENT_ID', '')
-CLIENT_SECRET = os.environ.get('WHOOP_CLIENT_SECRET', '')
-REDIRECT_URI  = os.environ.get('REDIRECT_URI', 'http://localhost:3000/callback')
+CLIENT_ID     = os.environ.get('WHOOP_CLIENT_ID', '').strip()
+CLIENT_SECRET = os.environ.get('WHOOP_CLIENT_SECRET', '').strip()
+REDIRECT_URI  = os.environ.get('REDIRECT_URI', 'http://localhost:3000/callback').strip()
 
 BASE_URL  = 'https://api.prod.whoop.com/developer'
 AUTH_URL  = 'https://api.prod.whoop.com/oauth/oauth2/auth'
