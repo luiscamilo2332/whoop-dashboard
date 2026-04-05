@@ -387,7 +387,7 @@ main{padding:20px;max-width:1400px;margin:0 auto;position:relative;z-index:1}
    AI CHAT
 ═══════════════════════════════ */
 .chat-fab{
-  position:fixed;bottom:80px;right:20px;z-index:400;
+  position:fixed;bottom:80px;right:20px;z-index:9998;
   width:52px;height:52px;border-radius:50%;
   background:linear-gradient(135deg,var(--teal2),var(--purple));
   border:none;cursor:pointer;
@@ -399,7 +399,7 @@ main{padding:20px;max-width:1400px;margin:0 auto;position:relative;z-index:1}
 @media(min-width:768px){.chat-fab{bottom:24px}}
 .chat-fab:hover{transform:scale(1.08);box-shadow:0 6px 28px rgba(0,229,195,.4)}
 .chat-panel{
-  position:fixed;bottom:0;right:0;z-index:500;
+  position:fixed;bottom:0;right:0;z-index:9999;
   width:100%;max-width:380px;
   height:500px;max-height:80vh;
   background:var(--card);
@@ -1131,9 +1131,9 @@ function toggleW(id){const el=document.getElementById(id),d=document.getElementB
   renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
 
   const scene=new THREE.Scene();
-  const camera=new THREE.PerspectiveCamera(45,1,0.1,100);
-  camera.position.set(0,0.2,4);
-  camera.lookAt(0,0.2,0);
+  const camera=new THREE.PerspectiveCamera(38,1,0.1,100);
+  camera.position.set(0,0.85,3.2);
+  camera.lookAt(0,0.85,0);
 
   function resize(){
     const w=canvas.parentElement.clientWidth,h=canvas.parentElement.clientHeight;
@@ -1289,35 +1289,38 @@ function toggleW(id){const el=document.getElementById(id),d=document.getElementB
 
   const mat=new THREE.PointsMaterial({size:0.022,vertexColors:true,sizeAttenuation:true,transparent:true,opacity:.9});
   const points=new THREE.Points(geo,mat);
-  points.position.y=-0.2;
-  scene.add(points);
+  const group=new THREE.Group();
+  group.add(points);
+  group.scale.setScalar(0.82);
+  group.position.y=0;
+  scene.add(group);
 
   // Holographic ring at base
-  const ringGeo=new THREE.TorusGeometry(0.35,0.004,8,80);
-  const ringMat=new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.3});
+  const ringGeo=new THREE.TorusGeometry(0.32,0.006,8,80);
+  const ringMat=new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.5});
   const ring=new THREE.Mesh(ringGeo,ringMat);
   ring.rotation.x=Math.PI/2;
-  ring.position.y=-0.22;
-  scene.add(ring);
+  ring.position.y=-0.18;
+  group.add(ring);
 
   // Animate
   let t=0;
   // Holographic ground circle
-  const circleGeo=new THREE.RingGeometry(0.3,0.35,64);
-  const circleMat=new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.15,side:THREE.DoubleSide});
+  const circleGeo=new THREE.RingGeometry(0.28,0.32,64);
+  const circleMat=new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.2,side:THREE.DoubleSide});
   const circle=new THREE.Mesh(circleGeo,circleMat);
-  circle.rotation.x=-Math.PI/2;circle.position.y=-0.22;
-  scene.add(circle);
+  circle.rotation.x=-Math.PI/2;circle.position.y=-0.18;
+  group.add(circle);
 
   function animate(){
     requestAnimationFrame(animate);
     t+=0.005;
-    points.rotation.y=t*0.35;
+    group.rotation.y=t*0.35;
     ring.rotation.z=t*0.6;
     circle.rotation.z=-t*0.2;
     // Breathing pulse on overall figure
-    const pulse=1+Math.sin(t*1.2)*0.012;
-    points.scale.setScalar(pulse);
+    const pulse=0.82+Math.sin(t*1.2)*0.008;
+    group.scale.setScalar(pulse);
     mat.opacity=0.82+Math.sin(t*1.8)*0.12;
     mat.size=0.022*(0.95+Math.sin(t*2)*0.05);
     ring.scale.setScalar(1+Math.sin(t*1.5)*0.06);
@@ -1334,6 +1337,8 @@ function toggleW(id){const el=document.getElementById(id),d=document.getElementB
   const msgs=$('chat-msgs'),input=$('chat-input'),send=$('chat-send');
   const sugg=$('chat-sugg');
   let history=[],chatOpen=false;
+  // Ensure panel is in body for correct stacking
+  document.body.appendChild(panel);
 
   // Build data context for AI
   const ctx={};
